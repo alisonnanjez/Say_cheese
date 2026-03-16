@@ -147,19 +147,25 @@ captions (
 
 ---
 
-## Deploying to Railway
+## Deploying to Render
 
-[Railway](https://railway.app) is the recommended platform for deploying this app as it supports persistent storage on the free tier, meaning your SQLite database and uploaded photos survive restarts.
+[Render](https://render.com) is the recommended platform for deploying this app. It has a free tier and works with SQLite out of the box.
 
 1. Push your project to GitHub
-2. Go to [railway.app](https://railway.app) and sign in with GitHub
-3. Click **New Project → Deploy from GitHub repo** and select your repo
-4. Add an environment variable: `PORT=3000`
-5. Railway will automatically detect Node.js and deploy
+2. Go to [render.com](https://render.com) and sign in with GitHub
+3. Click **New + → Web Service**
+4. Connect your GitHub account and select your repo
+5. Fill in the settings:
+   - **Runtime:** Node
+   - **Build Command:** `npm install`
+   - **Start Command:** `node server.js`
+6. Add an environment variable: `PORT=3000`
+7. Select the **Free** instance type
+8. Click **Create Web Service**
 
-Your app will be live at a Railway-provided URL that you can share with friends.
+Your app will be live at a Render-provided URL like `say-cheese.onrender.com` that you can share with friends.
 
-> **Note:** Make sure `saycheese.db` is in your `.gitignore` so you don't commit local test data. Railway will create a fresh database on first deploy.
+> **Note:** Make sure `saycheese.db` is in your `.gitignore` so you don't commit local test data. Render will create a fresh database on first deploy. Also note that on the free tier the service sleeps after 15 minutes of inactivity and takes a few seconds to wake up on the next request.
 
 ---
 
