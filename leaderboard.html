@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Say Cheese | Leaderboard</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,700;1,400&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+    <!-- NAVIGATION -->
+    <nav>
+        <div class="nav-content">
+            <div class="nav-brand">
+                <img src="Photos/Cute Camera Photo.jpeg" alt="Say Cheese">
+                <span>Say Cheese</span>
+            </div>
+            <div class="nav-links">
+                <a href="index.html" class="nav-link">Contest</a>
+                <a href="leaderboard.html" class="nav-link active">Leaderboard</a>
+            </div>
+            <div class="nav-right">
+                <span>Hi, <strong id="display-name"></strong></span>
+                <button onclick="logout()" class="logout-btn">Logout</button>
+            </div>
+        </div>
+    </nav>
+
+    <!-- HERO -->
+    <div class="leaderboard-hero">
+        <p class="eyebrow">Say Cheese</p>
+        <h1>🏆 Leaderboard</h1>
+        <p>The most-liked captions and the photos stirring up the most conversation.</p>
+    </div>
+
+    <div class="container">
+
+        <!-- TOP CAPTIONS TABLE -->
+        <div class="section-divider">
+            <span>Top Captions</span>
+        </div>
+
+        <div class="leaderboard-table" id="captions-table">
+            <!-- Header row -->
+            <div class="lb-row lb-row--header">
+                <span>#</span>
+                <span>Caption</span>
+                <span>Likes</span>
+            </div>
+            <div id="captions-body">
+                <div class="lb-loading">Loading…</div>
+            </div>
+        </div>
+
+        <!-- MOST CAPTIONED PHOTOS -->
+        <div class="section-divider" style="margin-top: 60px;">
+            <span>Most Captioned Photos</span>
+        </div>
+
+        <div class="leaderboard-table" id="photos-table">
+            <div class="lb-row lb-row--header">
+                <span>#</span>
+                <span>Photo</span>
+                <span>Captions</span>
+            </div>
+            <div id="photos-body">
+                <div class="lb-loading">Loading…</div>
+            </div>
+        </div>
+
+    </div>
+
+    <script>
+        // ── SESSION CHECK ──
+        const userId   = localStorage.getItem('currentUserId');
+        const userName = localStorage.getItem('currentUserName');
+        const token    = localStorage.getItem('sessionToken');
+
+        if (!userId || !token) {
+            window.location.href = 'login.html';
+        } else {
+            document.getElementById('display-name').innerText = userName;
+        }
+
+        // ── AUTH FETCH HELPER ──
+        function authFetch(url, options = {}) {
+            return fetch(url, {
+                ...options,
+                headers: {
+                    ...(options.headers || {}),
+                    'Authorization': `Bearer ${token}`
+                }
+            });
+        }
+
+        // ── RANK LABEL ──
+        function rankLabel(i) {
+            return i + 1;
+        }
+
+        // ── LOAD TOP CAPTIONS ──
+        async function loadTopCaptions() {
+            const res      = await authFetch('/all-captions');
+            if (res.status === 401) { logout(); return; }
+            const captions = await res.json();
+            const body     = document.getElementById('captions-body');
+
+            if (!captions.length) {
+                body.innerHTML = `<div class="lb-empty">No captions yet — head to the contest!</div>`;
+                return;
+            }
+
+            captions.sort((a, b) => b.likes - a.likes);
+
+            body.innerHTML = captions.map((c, i) => `
+                <div class="lb-row">
+                    <span class="lb-rank">${rankLabel(i)}</span>
+                    <div class="lb-info">
+                        <span class="lb-caption">"${c.caption_text}"</span>
+                        <span class="lb-meta">by ${c.username} &mdash; ${formatPhoto(c.photo_url)}</span>
+                    </div>
+                    <span class="lb-likes">❤️ ${c.likes || 0}</span>
+                </div>
+            `).join('');
+        }
+
+        // ── LOAD MOST CAPTIONED PHOTOS ──
+        async function loadPhotoStats() {
+            const res      = await authFetch('/all-captions');
+            if (res.status === 401) { logout(); return; }
+            const captions = await res.json();
+            const body     = document.getElementById('photos-body');
+
+            if (!captions.length) {
+                body.innerHTML = `<div class="lb-empty">No captions yet.</div>`;
+                return;
+            }
+
+            // Count captions per photo
+            const counts = {};
+            captions.forEach(c => {
+                counts[c.photo_url] = (counts[c.photo_url] || 0) + 1;
+            });
+
+            const sorted = Object.entries(counts)
+                .sort((a, b) => b[1] - a[1]);
+
+            body.innerHTML = sorted.map(([url, count], i) => `
+                <div class="lb-row lb-row--photo">
+                    <span class="lb-rank">${rankLabel(i)}</span>
+                    <div class="lb-info">
+                        <span class="lb-caption">${formatPhoto(url)}</span>
+                        <span class="lb-meta">${url.includes('user_') ? 'User uploaded' : formatPhoto(url)}</span>
+                    </div>
+                    <span class="lb-likes">💬 ${count}</span>
+                </div>
+            `).join('');
+        }
+
+        // ── HELPER: clean up photo filename for display ──
+        function formatPhoto(url) {
+            const filename = url.replace('Photos/', '').replace(/\.\w+$/, '');
+            // User uploaded files look like: user_1234567890_abc123
+            if (filename.startsWith('user_')) {
+                return 'User Upload';
+            }
+            // Default photos: charli_1, tyga_2 etc → "Charli 1", "Tyga 2"
+            return filename
+                .replace(/_/g, ' ')
+                .replace(/\b\w/g, c => c.toUpperCase());
+        }
+
+        // ── LOGOUT ──
+        async function logout() {
+            if (token) await authFetch('/logout', { method: 'POST' }).catch(() => {});
+            localStorage.clear();
+            window.location.href = 'login.html';
+        }
+
+        // ── INIT ──
+        loadTopCaptions();
+        loadPhotoStats();
+    </script>
+</body>
+</html>

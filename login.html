@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Say Cheese | Welcome</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,700;1,400&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+</head>
+<body class="login-page">
+
+    <!-- LEFT: Photo Panel -->
+    <div class="photo-panel">
+        <div class="photo-brand">
+            <img src="Photos/Cute Camera Photo.jpeg" alt="Say Cheese" class="brand-logo-img">
+            <span class="logo-text">Say Cheese</span>
+        </div>
+
+        <div class="panel-camera-wrap">
+            <img src="Photos/Login Page Photo.jpeg" alt="Camera" class="panel-camera-img">
+        </div>
+
+        <div class="photo-caption-overlay">
+            <h2>Where every shot deserves a <em>caption.</em></h2>
+            <p>Vote for your favourites and crown the wittiest writer.</p>
+        </div>
+    </div>
+
+    <!-- RIGHT: Auth Form -->
+    <div class="form-panel">
+        <div class="form-inner">
+            <div class="form-header">
+                <p class="eyebrow">Photo Caption Contest</p>
+                <h1 id="form-title">Welcome back</h1>
+            </div>
+
+            <div class="tab-switcher">
+                <button class="active" onclick="setMode('login')">Login</button>
+                <button onclick="setMode('register')">Create Account</button>
+            </div>
+
+            <div class="field-group">
+                <label>Username</label>
+                <input id="userIn" placeholder="Enter your username" autocomplete="username">
+            </div>
+
+            <div class="field-group">
+                <label>Password</label>
+                <input id="passIn" type="password" placeholder="Enter your password" autocomplete="current-password"
+                       onkeydown="if(event.key==='Enter') submitForm()">
+            </div>
+
+            <button class="submit-btn" onclick="submitForm()">
+                <span class="btn-shine"></span>
+                <span id="btn-label">Login</span>
+            </button>
+
+            <p class="error-msg" id="error-msg"></p>
+
+            <p class="form-footer">
+                <img src="Photos/Cute Camera Photo.jpeg" alt="" class="footer-cam-img">
+                Say Cheese &mdash; The Caption Contest
+            </p>
+        </div>
+    </div>
+
+    <script>
+        let currentMode = 'login';
+
+        function setMode(mode) {
+            currentMode = mode;
+            const isLogin = mode === 'login';
+            document.getElementById('form-title').textContent = isLogin ? 'Welcome back' : 'Join the contest';
+            document.getElementById('btn-label').textContent  = isLogin ? 'Login' : 'Create Account';
+            document.getElementById('passIn').autocomplete   = isLogin ? 'current-password' : 'new-password';
+            document.querySelectorAll('.tab-switcher button').forEach((btn, i) => {
+                btn.classList.toggle('active', (i === 0) === isLogin);
+            });
+            showError('');
+        }
+
+        function showError(msg) {
+            const el = document.getElementById('error-msg');
+            el.textContent = msg;
+            el.classList.toggle('show', !!msg);
+        }
+
+        async function submitForm() {
+            const username = document.getElementById('userIn').value.trim();
+            const password = document.getElementById('passIn').value;
+            if (!username || !password) { showError('Please fill in both fields.'); return; }
+
+            const btn = document.querySelector('.submit-btn');
+            btn.disabled = true;
+            document.getElementById('btn-label').textContent = 'Please wait…';
+
+            try {
+                const res = await fetch(`/${currentMode}`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ username, password })
+                });
+                const data = await res.json();
+                if (res.ok) {
+                    localStorage.setItem('currentUserId', data.userId);
+                    localStorage.setItem('currentUserName', username);
+                    localStorage.setItem('sessionToken', data.token);
+                    window.location.href = 'index.html';
+                } else {
+                    showError(data.message || 'Authentication failed.');
+                }
+            } catch {
+                showError('Network error. Please try again.');
+            } finally {
+                btn.disabled = false;
+                document.getElementById('btn-label').textContent = currentMode === 'login' ? 'Login' : 'Create Account';
+            }
+        }
+    </script>
+</body>
+</html>

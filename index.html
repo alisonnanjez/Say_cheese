@@ -1,0 +1,264 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Say Cheese | The Contest</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,700;1,400&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+    <!-- NAVIGATION -->
+    <nav>
+        <div class="nav-content">
+            <div class="nav-brand">
+                <img src="Photos/Cute Camera Photo.jpeg" alt="Say Cheese">
+                <span>Say Cheese</span>
+            </div>
+            <div class="nav-links">
+                <a href="index.html" class="nav-link active">Contest</a>
+                <a href="leaderboard.html" class="nav-link">Leaderboard</a>
+            </div>
+            <div class="nav-right">
+                <span>Hi, <strong id="display-name"></strong></span>
+                <button onclick="logout()" class="logout-btn">Logout</button>
+            </div>
+        </div>
+    </nav>
+
+    <!-- HERO HEADER -->
+    <div class="page-hero">
+        <p class="eyebrow">Say Cheese</p>
+        <h1>The Caption Contest</h1>
+        <p class="subtitle">Write the wittiest caption for each photo. Like your favourites to push them up the leaderboard.</p>
+    </div>
+
+    <!-- MAIN CONTENT -->
+    <div class="container">
+
+        <!-- UPLOAD SECTION -->
+        <div class="upload-section">
+            <div class="upload-card" id="upload-card">
+                <div class="upload-icon">📷</div>
+                <p class="upload-label">Add your own photo to the contest</p>
+                <input type="file" id="photo-input" accept="image/*" onchange="previewPhoto(event)">
+                <label for="photo-input" class="upload-btn secondary">Choose Photo</label>
+            </div>
+
+            <div class="upload-preview" id="upload-preview" style="display:none;">
+                <img id="preview-img" alt="Preview">
+                <div class="upload-preview-actions">
+                    <button class="post-btn" onclick="uploadPhoto()">Upload to Contest</button>
+                    <button class="secondary" onclick="cancelUpload()">Cancel</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- PHOTO GRID -->
+        <div id="photo-grid" class="grid-layout"></div>
+
+        <!-- DIVIDER -->
+        <div class="section-divider">
+            <span>Top Captions</span>
+        </div>
+
+        <!-- CAPTION FEED -->
+        <div class="caption-feed">
+            <div id="caption-list"></div>
+        </div>
+
+    </div>
+
+    <!-- TOAST -->
+    <div id="toast" class="toast"></div>
+
+    <script>
+        // ── SESSION CHECK ──
+        const userId   = localStorage.getItem('currentUserId');
+        const userName = localStorage.getItem('currentUserName');
+        const token    = localStorage.getItem('sessionToken');
+
+        if (!userId || !token) {
+            window.location.href = 'login.html';
+        } else {
+            document.getElementById('display-name').innerText = userName;
+        }
+
+        // ── AUTH FETCH HELPER ──
+        function authFetch(url, options = {}) {
+            return fetch(url, {
+                ...options,
+                headers: {
+                    ...(options.headers || {}),
+                    'Authorization': `Bearer ${token}`
+                }
+            });
+        }
+
+        // ── TOAST ──
+        function showToast(msg, type = 'success') {
+            const t = document.getElementById('toast');
+            t.textContent = msg;
+            t.className = `toast toast--${type} toast--show`;
+            setTimeout(() => { t.className = 'toast'; }, 2800);
+        }
+
+        // ── LOAD PHOTOS ──
+        async function loadPhotos() {
+            const res = await authFetch('/photos');
+            if (res.status === 401) { logout(); return; }
+            const photos = await res.json();
+            const grid   = document.getElementById('photo-grid');
+
+            grid.innerHTML = photos.map(p => `
+                <div class="card" id="card-${p.id}">
+                    <div class="photo-container">
+                        <img src="${p.url}"
+                             onclick="window.open('${p.url}', '_blank')"
+                             title="View full size"
+                             alt="Contest photo">
+                        <div class="photo-overlay">
+                            <span class="photo-overlay-hint">Click to view full size</span>
+                        </div>
+                    </div>
+                    ${p.uploaded_by ? `<div class="photo-credit">${p.uploaded_by}</div>` : ''}
+                    <div class="card-content">
+                        <input id="cap-${p.id}"
+                               placeholder="Write your caption…"
+                               onkeydown="if(event.key==='Enter') submitCaption(${p.id})">
+                        <button class="post-btn" onclick="submitCaption(${p.id})">Post</button>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        // ── SUBMIT CAPTION ──
+        async function submitCaption(photoId) {
+            const input = document.getElementById(`cap-${photoId}`);
+            const text  = input.value.trim();
+            if (!text) { showToast('Write something first!', 'error'); return; }
+
+            const btn = document.querySelector(`#card-${photoId} .post-btn`);
+            btn.disabled    = true;
+            btn.textContent = 'Posting…';
+
+            const res = await authFetch('/captions', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ photo_id: photoId, caption_text: text })
+            });
+
+            if (res.ok) {
+                input.value     = '';
+                btn.textContent = 'Posted ✓';
+                showToast('Caption posted!');
+                setTimeout(() => { btn.disabled = false; btn.textContent = 'Post'; }, 1500);
+                loadCaptions();
+            } else {
+                btn.disabled    = false;
+                btn.textContent = 'Post';
+                showToast('Something went wrong.', 'error');
+            }
+        }
+
+        // ── LOAD CAPTIONS ──
+        async function loadCaptions() {
+            const res      = await authFetch('/all-captions');
+            if (res.status === 401) { logout(); return; }
+            const captions = await res.json();
+            const list     = document.getElementById('caption-list');
+
+            if (captions.length === 0) {
+                list.innerHTML = `<p class="empty-state">No captions yet — be the first!</p>`;
+                return;
+            }
+
+            list.innerHTML = captions.map((c, i) => `
+                <div class="caption-item ${i === 0 ? 'caption-item--top' : ''}">
+                    <div class="caption-rank">${i + 1}</div>
+                    <div class="cap-info">
+                        <span class="cap-username">${c.username}</span>
+                        <span class="cap-text">"${c.caption_text}"</span>
+                        <span class="cap-photo">on ${formatPhoto(c.photo_url)}</span>
+                    </div>
+                    <div class="cap-actions">
+                        <span class="like-count">❤️ ${c.likes || 0}</span>
+                        <button class="like-btn" onclick="upvote(${c.id}, this)">Like</button>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        // ── FORMAT PHOTO NAME ──
+        function formatPhoto(url) {
+            const filename = url.replace('Photos/', '').replace(/\.\w+$/, '');
+            if (filename.startsWith('user_')) return 'User Upload';
+            return filename.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+        }
+
+        // ── UPVOTE ──
+        async function upvote(captionId, btn) {
+            btn.disabled    = true;
+            btn.textContent = '❤️';
+            await authFetch(`/like-caption/${captionId}`, { method: 'POST' });
+            loadCaptions();
+        }
+
+        // ── PHOTO UPLOAD ──
+        function previewPhoto(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = e => {
+                document.getElementById('preview-img').src = e.target.result;
+                document.getElementById('upload-card').style.display    = 'none';
+                document.getElementById('upload-preview').style.display = 'flex';
+            };
+            reader.readAsDataURL(file);
+        }
+
+        function cancelUpload() {
+            document.getElementById('photo-input').value = '';
+            document.getElementById('upload-card').style.display    = 'flex';
+            document.getElementById('upload-preview').style.display = 'none';
+        }
+
+        async function uploadPhoto() {
+            const file = document.getElementById('photo-input').files[0];
+            if (!file) return;
+
+            const btn = document.querySelector('.upload-preview .post-btn');
+            btn.disabled    = true;
+            btn.textContent = 'Uploading…';
+
+            const formData = new FormData();
+            formData.append('photo', file);
+
+            const res = await authFetch('/upload-photo', { method: 'POST', body: formData });
+
+            if (res.ok) {
+                showToast('Photo added to the contest! 🎉');
+                cancelUpload();
+                loadPhotos();
+            } else {
+                const data = await res.json();
+                showToast(data.message || 'Upload failed.', 'error');
+                btn.disabled    = false;
+                btn.textContent = 'Upload to Contest';
+            }
+        }
+
+        // ── LOGOUT ──
+        async function logout() {
+            if (token) await authFetch('/logout', { method: 'POST' }).catch(() => {});
+            localStorage.clear();
+            window.location.href = 'login.html';
+        }
+
+        // ── INIT ──
+        loadPhotos();
+        loadCaptions();
+    </script>
+</body>
+</html>
